@@ -18,7 +18,8 @@
     --line:#2a2f3c;
     --white:#e8e6df;
   }
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   html,body{height:100%;overflow:hidden;background:var(--night);font-family:"Segoe UI",system-ui,sans-serif;color:var(--white)}
   #game{display:block;width:100vw;height:100vh;touch-action:none}
 
@@ -303,6 +304,11 @@ function bindTouch(id, set){
 bindTouch("leftBtn", v=>touchL=v);
 bindTouch("rightBtn",v=>touchR=v);
 bindTouch("brakeBtn",v=>touchB=v);
+// iOS: Lupe, Textauswahl & Kontextmenü beim langen Drücken verhindern
+document.addEventListener("contextmenu",e=>e.preventDefault());
+const tui=document.getElementById("touchUI");
+tui.addEventListener("touchstart",e=>e.preventDefault(),{passive:false});
+tui.addEventListener("touchend",e=>e.preventDefault(),{passive:false});
 
 /* ---------------- Sound: Reihensechser ---------------- */
 let AC=null, oscA=null, oscB=null, gain=null, muted=false;
