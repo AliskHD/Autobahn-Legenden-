@@ -66,11 +66,22 @@
   .bar i.up{background:var(--green)}
 
   /* Hauptbutton */
-  .btn{margin-top:14px;background:var(--amber);color:#1a1206;border:none;font-weight:800;font-size:16px;
+  .btn{margin-top:12px;background:var(--amber);color:#1a1206;border:none;font-weight:800;font-size:16px;
     letter-spacing:.14em;text-transform:uppercase;padding:14px 0;border-radius:8px;cursor:pointer;
     width:min(400px,92vw);flex-shrink:0}
   .btn:disabled{background:#2c313d;color:#6d7482;cursor:default}
   .btn.buy{background:var(--green);color:#0d1a0c}
+
+  /* Strecken-Auswahl */
+  #envRow{display:flex;align-items:center;gap:8px;margin-top:12px;width:min(400px,92vw);
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 9px}
+  .arrowS{flex:0 0 auto;width:36px;height:42px;border-radius:8px;border:1px solid var(--line);
+    background:transparent;color:var(--amber);font-size:15px;cursor:pointer}
+  .arrowS:active{background:rgba(255,157,46,.18)}
+  #envInfo{flex:1;text-align:left;padding-left:4px}
+  #envName{font-weight:800;font-size:13px;letter-spacing:.02em}
+  #envMeta{font-size:10px;color:#9aa0ad;margin-top:1px}
+  #envMeta .lockTag{color:var(--amber);font-weight:700}
 
   /* ---------- Tuning-Tabs ---------- */
   #tabs{display:flex;gap:8px;margin-top:16px;width:min(400px,92vw)}
@@ -170,6 +181,16 @@
     <div class="stat">Grip<div class="bar"><i id="bGrip"></i></div></div>
   </div>
 
+  <div id="envRow">
+    <button class="arrowS" id="prevEnv" aria-label="Vorherige Strecke">◀</button>
+    <div id="envInfo">
+      <div id="envName"></div>
+      <div id="envMeta"></div>
+    </div>
+    <button class="upBtn hidden" id="envBuy"></button>
+    <button class="arrowS" id="nextEnv" aria-label="Nächste Strecke">▶</button>
+  </div>
+
   <button class="btn" id="mainBtn">Zündung</button>
 
   <div id="tabs" class="hidden">
@@ -255,7 +276,7 @@ const UPGRADES = [
   { key:"mo", name:"Motor",      desc:"+ Antritt" },
   { key:"ge", name:"Getriebe",   desc:"+ Endgeschwindigkeit" },
   { key:"fa", name:"Fahrwerk",   desc:"+ Grip in Kurven" },
-  { key:"ka", name:"Karosserie", desc:"– Crash-Folgen" },
+  { key:"ka", name:"Karosserie", desc:"Crash bremst weniger aus" },
 ];
 const MAX_LVL = 5;
 
@@ -272,14 +293,47 @@ const PAINTS = [
 const COST_SPOILER = 800;
 const COST_DARKTAIL = 400;
 
+/* ---------------- Strecken / Umgebungen ---------------- */
+const ENVS = [
+  { id:"sommer", name:"Erzgebirge · Sommer", price:0, mult:1.0,
+    sky:["#0e1430","#3c2c52","#c96b3a"], sun:"#ffb05e", night:false, stars:false,
+    mtn:"#171b2a", grassA:"#26411f", grassB:"#203619", ground:"#21331f",
+    shoA:"#5a5346", shoB:"#4e4337", roadA:"#3c4049", roadB:"#383c44",
+    tree:"#1d3a26", treeSnow:false, fog:false, ice:1.0,
+    desc:"Die klassische Feierabendrunde" },
+  { id:"herbst", name:"Augustusburg · Herbst", price:2500, mult:1.2,
+    sky:["#2a2f3d","#6b5a4a","#c08a4a"], sun:"#e8cf9a", night:false, stars:false,
+    mtn:"#23252e", grassA:"#4a4426", grassB:"#403a20", ground:"#3d3722",
+    shoA:"#5a5346", shoB:"#4e4337", roadA:"#3c4049", roadB:"#383c44",
+    tree:"#8a5524", treeSnow:false, fog:true, ice:1.0,
+    desc:"Serpentinen & Nebelbänke" },
+  { id:"nacht", name:"Nachtfahrt", price:5000, mult:1.4,
+    sky:["#04060d","#0a0f1e","#16203a"], sun:null, night:true, stars:true,
+    mtn:"#0a0d16", grassA:"#0e1a11", grassB:"#0b150d", ground:"#0c150e",
+    shoA:"#3a352c", shoB:"#322d25", roadA:"#26292f", roadB:"#23262b",
+    tree:"#0d1c13", treeSnow:false, fog:false, ice:1.0,
+    desc:"Nur du und deine Scheinwerfer" },
+  { id:"winter", name:"Winter im Erzgebirge", price:8000, mult:1.6,
+    sky:["#6b7686","#9aa3b0","#d8dade"], sun:"#f2f0e8", night:false, stars:false,
+    mtn:"#7e8794", grassA:"#d4d8de", grassB:"#c9ced6", ground:"#c6cbd3",
+    shoA:"#a8aab0", shoB:"#9b9da3", roadA:"#4a4e57", roadB:"#464a52",
+    tree:"#1d3a26", treeSnow:true, fog:false, ice:0.82,
+    desc:"Vorsicht: glatte Fahrbahn!" },
+];
+
 /* ---------------- Spielstand ---------------- */
-const DEFAULT_SAVE = { dm:0, best:0, owned:["e21_318"], sel:"e21_318", up:{}, cust:{} };
+const DEFAULT_SAVE = { dm:0, best:0, owned:["e21_318"], sel:"e21_318", up:{}, cust:{},
+  envOwned:["sommer"], env:"sommer" };
 function loadSave(){
   try{
     const s = JSON.parse(localStorage.getItem("al-save"));
     if(s && Array.isArray(s.owned)){
       const m = Object.assign({}, DEFAULT_SAVE, s);
       m.up = m.up||{}; m.cust = m.cust||{};
+      m.envOwned = Array.isArray(m.envOwned)? m.envOwned : ["sommer"];
+      m.envOwned = m.envOwned.filter(id=>ENVS.some(x=>x.id===id));
+      if(!m.envOwned.includes("sommer")) m.envOwned.push("sommer");
+      if(!ENVS.some(x=>x.id===m.env) || !m.envOwned.includes(m.env)) m.env="sommer";
       m.owned = m.owned.filter(id=>MODELS.some(x=>x.id===id));
       if(!m.owned.includes("e21_318")) m.owned.push("e21_318");
       if(!MODELS.some(x=>x.id===m.sel) || !m.owned.includes(m.sel)) m.sel="e21_318";
@@ -303,7 +357,8 @@ function effStats(m){
     acc:  m.acc + u.mo*3,
     grip: Math.min(1.18, m.grip + u.fa*0.035),
     crashDur: 1.1 - u.ka*0.13,
-    crashPen: 150 - u.ka*22
+    crashPen: 150 - u.ka*22,
+    crashKeep: 0.12 + u.ka*0.13   // Stufe 0: bremst auf 12% ab · Stufe 5: bleibt 77% Tempo
   };
 }
 function skinOf(m){
@@ -324,6 +379,9 @@ let selModel = MODELS[viewIdx];
 let stats = effStats(selModel);
 let playerSkin = skinOf(selModel);
 let activeTab = "tech";
+let envIdx = Math.max(0, ENVS.findIndex(e=>e.id===save.env));
+let E = ENVS[envIdx];
+const STARS = Array.from({length:90},()=>({x:Math.random(),y:Math.random()*0.45,r:Math.random()<0.2?1.6:1}));
 
 /* ---------------- Auto-Zeichner (Heckansicht) ---------------- */
 function drawBmwRear(g, x, y, w, s, steer=0, braking=false){
@@ -469,6 +527,7 @@ function renderGarage(){
     if(activeTab==="tech") renderTech(m);
     else renderOptik(m);
   }
+  renderEnvRow();
 }
 
 function renderTech(m){
@@ -570,6 +629,43 @@ function stepCar(d){
 }
 el("prevCar").addEventListener("click",()=>stepCar(-1));
 el("nextCar").addEventListener("click",()=>stepCar(1));
+
+function renderEnvRow(){
+  const env=ENVS[envIdx];
+  const eOwned=save.envOwned.includes(env.id);
+  el("envName").textContent=env.name;
+  const multTxt = "Verdienst ×"+env.mult.toLocaleString("de-DE");
+  if(eOwned){
+    el("envMeta").innerHTML = `${env.desc} · ${multTxt}`;
+    el("envBuy").classList.add("hidden");
+  } else {
+    el("envMeta").innerHTML = `<span class="lockTag">🔒</span> ${env.desc} · ${multTxt}`;
+    const buy=el("envBuy");
+    buy.classList.remove("hidden");
+    buy.textContent=fmtDM(env.price);
+    buy.disabled=save.dm<env.price;
+  }
+}
+function stepEnv(d){
+  envIdx=(envIdx+d+ENVS.length)%ENVS.length;
+  const env=ENVS[envIdx];
+  if(save.envOwned.includes(env.id)){ save.env=env.id; E=env; saveSave(); }
+  blip(380,.04,"square",.05);
+  renderGarage();
+}
+el("prevEnv").addEventListener("click",()=>stepEnv(-1));
+el("nextEnv").addEventListener("click",()=>stepEnv(1));
+el("envBuy").addEventListener("click",()=>{
+  const env=ENVS[envIdx];
+  if(!save.envOwned.includes(env.id) && save.dm>=env.price){
+    save.dm-=env.price;
+    save.envOwned.push(env.id);
+    save.env=env.id; E=env;
+    saveSave();
+    blip(660,.1); setTimeout(()=>blip(990,.16),120);
+    renderGarage();
+  }
+});
 el("tabTech").addEventListener("click",()=>{ activeTab="tech";
   el("tabTech").classList.add("on"); el("tabOptik").classList.remove("on"); renderGarage(); });
 el("tabOptik").addEventListener("click",()=>{ activeTab="optik";
@@ -616,23 +712,65 @@ function addSection(count, curve, hill=0){
 }
 function buildTrack(){
   segments=[];
-  addSection(60, 0);
-  addSection(70, 1.6, 600);
-  addSection(50, 0);
-  addSection(80,-2.4);
-  addSection(60, 0,-900);
-  addSection(70, 3.0, 500);
-  addSection(40, 0);
-  addSection(90,-1.4,-400);
-  addSection(60, 2.2);
-  addSection(70, 0, 800);
-  addSection(80,-3.0,-500);
-  addSection(50, 0);
+  if(E.id==="herbst"){
+    // Schloss-Serpentinen: eng, viel Höhenunterschied
+    addSection(50, 0);
+    addSection(45, 2.8, 700);
+    addSection(35,-3.2, 300);
+    addSection(45, 3.0,-400);
+    addSection(40, 0, 600);
+    addSection(50,-2.6);
+    addSection(35, 2.4,-700);
+    addSection(45,-3.0, 400);
+    addSection(55, 0,-500);
+    addSection(45, 2.2, 500);
+    addSection(50,-1.8,-300);
+    addSection(45, 0);
+  } else if(E.id==="nacht"){
+    // Nachtetappe: lange, schnelle Bögen
+    addSection(80, 0);
+    addSection(90, 1.2, 400);
+    addSection(70, 0);
+    addSection(100,-1.6);
+    addSection(80, 0,-600);
+    addSection(90, 1.8, 300);
+    addSection(70,-1.0);
+    addSection(90, 0, 500);
+    addSection(80,-2.0,-400);
+    addSection(60, 0);
+  } else if(E.id==="winter"){
+    // Winterrunde: harmlos wirkende Kombis, aber glatt
+    addSection(70, 0);
+    addSection(60, 1.4, 300);
+    addSection(50,-1.8);
+    addSection(60, 2.2,-400);
+    addSection(70, 0, 500);
+    addSection(60,-2.6);
+    addSection(50, 1.6, 300);
+    addSection(70,-1.2,-500);
+    addSection(60, 2.0);
+    addSection(60, 0,-200);
+  } else {
+    // Sommer: die klassische Runde
+    addSection(60, 0);
+    addSection(70, 1.6, 600);
+    addSection(50, 0);
+    addSection(80,-2.4);
+    addSection(60, 0,-900);
+    addSection(70, 3.0, 500);
+    addSection(40, 0);
+    addSection(90,-1.4,-400);
+    addSection(60, 2.2);
+    addSection(70, 0, 800);
+    addSection(80,-3.0,-500);
+    addSection(50, 0);
+  }
   trackLen = segments.length * SEG_LEN;
 
+  const treeStep = E.id==="herbst" ? 6 : 9;   // Herbst: dichter Wald
   for(let n=0;n<segments.length;n++){
-    if(n%9===0)  segments[n].sprites.push({type:"tree",  off:-1.55 - Math.random()*1.4, s:1+Math.random()*0.8});
-    if(n%11===0) segments[n].sprites.push({type:"tree",  off: 1.55 + Math.random()*1.4, s:1+Math.random()*0.8});
+    if(n%treeStep===0)  segments[n].sprites.push({type:"tree",  off:-1.55 - Math.random()*1.4, s:1+Math.random()*0.8});
+    if(n%(treeStep+2)===0) segments[n].sprites.push({type:"tree",  off: 1.55 + Math.random()*1.4, s:1+Math.random()*0.8});
     if(n%18===0) segments[n].sprites.push({type:"post",  off:-1.18});
     if(n%18===9) segments[n].sprites.push({type:"post",  off: 1.18});
     if(n%140===70) segments[n].sprites.push({type:"sign", off: 1.5, text: ORTE[(n/140|0)%ORTE.length]});
@@ -754,10 +892,14 @@ function startGame(){
   initAudio(); if(AC&&AC.state==="suspended") AC.resume();
   stats = effStats(selModel);
   playerSkin = skinOf(selModel);
+  E = ENVS.find(x=>x.id===save.env) || ENVS[0];
   buildTrack(); spawnTraffic(22);
   pos=0; playerX=0; speed=0; kmTotal=0; overtakes=0; score=0; timer=60;
   checkpointArmed=true; crashT=0; invT=0; etappe=0; shake=0;
-  msg("SAISONSTART · GUTE FAHRT 🦈");
+  msg(E.id==="winter" ? "VORSICHT GLÄTTE! ❄️" :
+      E.id==="nacht"  ? "NACHTETAPPE · LICHT AN" :
+      E.id==="herbst" ? "NEBELFAHRT · GUTE SICHT?" :
+                        "SAISONSTART · GUTE FAHRT 🦈");
   document.getElementById("menu").classList.add("hidden");
   document.getElementById("muteBtn").classList.remove("hidden");
   if(matchMedia("(hover:none)").matches) document.getElementById("touchUI").classList.remove("hidden");
@@ -771,9 +913,9 @@ function endGame(title){
   document.getElementById("resOvr").textContent=overtakes;
   document.getElementById("resScore").textContent=Math.floor(score);
 
-  const earned = Math.floor(score*0.12) + overtakes*5;
+  const earned = Math.floor((Math.floor(score*0.12) + overtakes*5) * E.mult);
   save.dm += earned;
-  document.getElementById("resEarn").textContent = "+"+fmtDM(earned);
+  document.getElementById("resEarn").textContent = "+"+fmtDM(earned)+(E.mult>1?` (×${E.mult.toLocaleString("de-DE")})`:"");
 
   let bestTxt="";
   if(Math.floor(score)>save.best){
@@ -800,7 +942,7 @@ function update(dt){
   const brake = keys.ArrowDown||keys.s||touchB||keys[" "];
   const gas   = keys.ArrowUp||keys.w||touchG;
 
-  if(crashT>0){ crashT-=dt; speed=Math.max(speed - maxSpd*1.5*dt, maxSpd*0.12); }
+  if(crashT>0){ crashT-=dt; speed=Math.max(speed - maxSpd*1.5*dt, maxSpd*stats.crashKeep); }
   else if(brake) speed=Math.max(0, speed - maxSpd*1.1*dt);
   else if(gas) speed=Math.min(maxSpd, speed + stats.acc*9*dt);
   else speed=Math.max(0, speed - maxSpd*0.14*dt);
@@ -813,10 +955,11 @@ function update(dt){
 
   const seg=findSeg(pos);
   const spdR=speed/maxSpd;
+  const gripEff = stats.grip * E.ice;   // Winter: glatte Fahrbahn
 
   const steer=(right?1:0)-(left?1:0);
-  playerX += steer * 2.3 * stats.grip * dt * (0.45+0.55*spdR);
-  playerX -= seg.curve * 0.00009 * speed * dt * (1.6-stats.grip*0.6);
+  playerX += steer * 2.3 * gripEff * dt * (0.45+0.55*spdR);
+  playerX -= seg.curve * 0.00009 * speed * dt * (1.6-gripEff*0.6);
   playerX = Math.max(-1.9, Math.min(1.9, playerX));
 
   pos += speed*dt;
@@ -841,20 +984,31 @@ function update(dt){
     setTimeout(()=>checkpointArmed=true, 4000);
   }
 
+  const prevPos = pos - speed*dt;   // Spielerposition vor diesem Frame
   for(const c of traffic){
-    const prevAhead = (c.z - pos + trackLen)%trackLen;
+    function relDistFrom(p, cz){
+      let d=(cz - p);
+      d=((d % trackLen)+trackLen)%trackLen;
+      if(d>trackLen/2) d-=trackLen;
+      return d;
+    }
+    const cBefore=c.z;
     c.z=(c.z + c.speed*dt)%trackLen;
-    const ahead=(c.z - pos + trackLen)%trackLen;
+    // Relativabstand vorher (alte Spieler- & Auto-Position) vs. nachher (neue beide)
+    const before=relDistFrom(prevPos, cBefore);
+    const after =relDistFrom(pos, c.z);
 
-    if(prevAhead<2500 && ahead>trackLen-2500 && speed>c.speed){
+    // Überholt: war vor uns (>0), ist jetzt hinter/neben uns (<=0)
+    if(before>0 && after<=0 && before<1500){
       overtakes++; score+=120; c.passed=true;
       const gap=Math.abs(playerX-c.off*2);
-      if(gap<0.95 && invT<=0){ score+=80; msg("KNAPP VORBEI! +80"); blip(740,.08,"triangle",.1); }
+      if(gap<0.7 && invT<=0){ score+=80; msg("KNAPP VORBEI! +80"); blip(740,.08,"triangle",.1); }
       else blip(520,.07,"triangle",.08);
     }
-    if(ahead<140 || ahead>trackLen-60){
-      const cw=c.truck?0.42:0.30;
-      if(Math.abs(playerX-c.off*2)<cw+0.34 && invT<=0 && speed>c.speed*0.9 && ahead<140){
+    // Kollision (nur knapp vor uns)
+    if(after>0 && after<140){
+      const cw=c.truck?0.26:0.17;
+      if(Math.abs(playerX-c.off*2)<cw+0.16 && invT<=0 && speed>c.speed*0.9){
         crashT=stats.crashDur; invT=3.0; shake=9;
         score=Math.max(0,score-stats.crashPen);
         msg("AUTSCH! BLECHSCHADEN");
@@ -885,10 +1039,14 @@ function project(worldX, worldY, worldZ, camX, camY, camZ){
 function drawTree(x,y,s){
   const h=130*s, w=70*s;
   cx.fillStyle="#2b231c"; cx.fillRect(x-3*s,y-18*s,6*s,18*s);
-  cx.fillStyle="#1d3a26";
   for(let i=0;i<3;i++){
     const ty=y-18*s-i*h*0.27, tw=w*(1-i*0.26);
+    cx.fillStyle=E.tree;
     cx.beginPath(); cx.moveTo(x,ty-h*0.4); cx.lineTo(x-tw/2,ty); cx.lineTo(x+tw/2,ty); cx.closePath(); cx.fill();
+    if(E.treeSnow){
+      cx.fillStyle="#e8ecf2";
+      cx.beginPath(); cx.moveTo(x,ty-h*0.4); cx.lineTo(x-tw*0.27,ty-h*0.18); cx.lineTo(x+tw*0.27,ty-h*0.18); cx.closePath(); cx.fill();
+    }
   }
 }
 function drawPost(x,y,s){
@@ -939,19 +1097,32 @@ function drawTrafficCar(p, c){
 
 function render(){
   const sky=cx.createLinearGradient(0,0,0,H*0.55);
-  sky.addColorStop(0,"#0e1430");
-  sky.addColorStop(0.55,"#3c2c52");
-  sky.addColorStop(1,"#c96b3a");
+  sky.addColorStop(0,E.sky[0]);
+  sky.addColorStop(0.55,E.sky[1]);
+  sky.addColorStop(1,E.sky[2]);
   cx.fillStyle=sky; cx.fillRect(0,0,W,H*0.55);
-  cx.fillStyle="#ffb05e";
-  cx.beginPath(); cx.arc(W*0.72,H*0.42,H*0.055,0,Math.PI*2); cx.fill();
-  cx.fillStyle="#171b2a";
+  if(E.stars){
+    cx.fillStyle="rgba(232,230,223,.85)";
+    for(const s of STARS) cx.fillRect(s.x*W, s.y*H, s.r, s.r);
+  }
+  if(E.night){
+    // Mond
+    cx.fillStyle="#e8e6df";
+    cx.beginPath(); cx.arc(W*0.72,H*0.30,H*0.045,0,Math.PI*2); cx.fill();
+    cx.fillStyle="rgba(140,145,160,.5)";
+    cx.beginPath(); cx.arc(W*0.71,H*0.29,H*0.011,0,Math.PI*2); cx.fill();
+    cx.beginPath(); cx.arc(W*0.735,H*0.315,H*0.007,0,Math.PI*2); cx.fill();
+  } else if(E.sun){
+    cx.fillStyle=E.sun;
+    cx.beginPath(); cx.arc(W*0.72,H*0.42,H*0.055,0,Math.PI*2); cx.fill();
+  }
+  cx.fillStyle=E.mtn;
   cx.beginPath(); cx.moveTo(0,H*0.55);
   for(let i=0;i<=12;i++){
     cx.lineTo(W*i/12, H*0.55 - (Math.sin(i*1.7)+1)*H*0.045 - (i%3===0?H*0.03:0));
   }
   cx.lineTo(W,H*0.55); cx.closePath(); cx.fill();
-  cx.fillStyle="#21331f"; cx.fillRect(0,H*0.5,W,H*0.5);
+  cx.fillStyle=E.ground; cx.fillRect(0,H*0.5,W,H*0.5);
 
   if(state===ST.MENU){ return; }
 
@@ -977,11 +1148,11 @@ function render(){
     else{
       maxY=p1.y;
       const light=(idx%2===0);
-      cx.fillStyle=light?"#26411f":"#203619";
+      cx.fillStyle=light?E.grassA:E.grassB;
       cx.fillRect(0,p2.y,W,p1.y-p2.y+1);
-      cx.fillStyle=light?"#5a5346":"#4e4337";
+      cx.fillStyle=light?E.shoA:E.shoB;
       poly(p1.x-p1.w*1.06,p1.y, p1.x+p1.w*1.06,p1.y, p2.x+p2.w*1.06,p2.y, p2.x-p2.w*1.06,p2.y);
-      cx.fillStyle=light?"#3c4049":"#383c44";
+      cx.fillStyle=light?E.roadA:E.roadB;
       poly(p1.x-p1.w,p1.y, p1.x+p1.w,p1.y, p2.x+p2.w,p2.y, p2.x-p2.w,p2.y);
       cx.fillStyle="#cfd2cc";
       poly(p1.x-p1.w,p1.y, p1.x-p1.w*0.965,p1.y, p2.x-p2.w*0.965,p2.y, p2.x-p2.w,p2.y);
@@ -1016,6 +1187,28 @@ function render(){
     } else if(d.banner){
       drawBanner(p.x,p.y,p.w*2.1,d.banner,d.flash);
     }
+  }
+
+  // Nebel überm Tal (Herbst)
+  if(E.fog){
+    const fg=cx.createLinearGradient(0,H*0.46,0,H*0.80);
+    fg.addColorStop(0,"rgba(196,192,200,.6)");
+    fg.addColorStop(1,"rgba(196,192,200,0)");
+    cx.fillStyle=fg; cx.fillRect(0,H*0.40,W,H*0.45);
+  }
+  // Scheinwerferkegel (Nacht)
+  if(E.night){
+    const hg=cx.createLinearGradient(0,H*0.94,0,H*0.55);
+    hg.addColorStop(0,"rgba(255,242,196,.34)");
+    hg.addColorStop(1,"rgba(255,242,196,0)");
+    cx.fillStyle=hg;
+    const cwp=Math.min(W*0.34,230);
+    cx.beginPath();
+    cx.moveTo(W/2-cwp*0.42, H*0.93);
+    cx.lineTo(W/2+cwp*0.42, H*0.93);
+    cx.lineTo(W/2+cwp*1.7, H*0.56);
+    cx.lineTo(W/2-cwp*1.7, H*0.56);
+    cx.closePath(); cx.fill();
   }
 
   const steer=((keys.ArrowRight||keys.d||touchR)?1:0)-((keys.ArrowLeft||keys.a||touchL)?1:0);
